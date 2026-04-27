@@ -1,11 +1,15 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { ChatPubSub } from '../chat/pubsub.service';
 import { type AuthUser, CurrentUser } from '../common/current-user.decorator';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { RoomsService } from './rooms.service';
 
 @Controller('rooms')
 export class RoomsController {
-  constructor(private readonly rooms: RoomsService) {}
+  constructor(
+    private readonly rooms: RoomsService,
+    private readonly pubsub: ChatPubSub,
+  ) {}
 
   @Get()
   async list() {
@@ -26,6 +30,7 @@ export class RoomsController {
   @Delete(':id')
   async delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     await this.rooms.requireOwnedBy(id, user.id);
+    await this.pubsub.publish({ type: 'room:deleted', roomId: id, payload: { roomId: id } });
     await this.rooms.delete(id);
     return { deleted: true };
   }

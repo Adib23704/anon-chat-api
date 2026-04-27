@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, lt, or } from 'drizzle-orm';
+import { ChatPubSub } from '../chat/pubsub.service';
 import {
   MessageEmptyException,
   MessageTooLongException,
@@ -32,6 +33,7 @@ export class MessagesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Db,
     private readonly rooms: RoomsService,
+    private readonly pubsub: ChatPubSub,
   ) {}
 
   async send(roomId: string, userId: string, username: string, raw: string): Promise<MessageView> {
@@ -48,12 +50,20 @@ export class MessagesService {
       .values({ id: newMessageId(), roomId, userId, content })
       .returning();
 
+    const createdAt = row.createdAt.toISOString();
+
+    await this.pubsub.publish({
+      type: 'message:new',
+      roomId,
+      payload: { id: row.id, username, content: row.content, createdAt },
+    });
+
     return {
       id: row.id,
       roomId: row.roomId,
       username,
       content: row.content,
-      createdAt: row.createdAt.toISOString(),
+      createdAt,
     };
   }
 

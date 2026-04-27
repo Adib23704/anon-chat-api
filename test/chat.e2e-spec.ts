@@ -109,4 +109,53 @@ describe('chat gateway', () => {
 
     sockA.close();
   });
+
+  it('broadcasts message:new when a REST POST hits /messages', async () => {
+    const owner = await setupRoomFor('alice');
+
+    const sock = connect({ url, token: owner.sessionToken, roomId: owner.roomId });
+    await once(sock, 'room:joined');
+
+    const incoming = once<{
+      id: string;
+      username: string;
+      content: string;
+      createdAt: string;
+    }>(sock, 'message:new');
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${owner.roomId}/messages`)
+      .set(auth(owner.sessionToken))
+      .send({ content: 'broadcast me' })
+      .expect(201);
+
+    const evt = await incoming;
+    expect(evt).toEqual({
+      id: expect.stringMatching(/^msg_/),
+      username: 'alice',
+      content: 'broadcast me',
+      createdAt: expect.any(String),
+    });
+
+    sock.close();
+  });
+
+  it('broadcasts room:deleted and disconnects clients on DELETE /rooms/:id', async () => {
+    const owner = await setupRoomFor('owner');
+    const guest = await login(app, 'guest');
+
+    const sock = connect({ url, token: guest.sessionToken, roomId: owner.roomId });
+    await once(sock, 'room:joined');
+
+    const deleted = once<{ roomId: string }>(sock, 'room:deleted');
+    const disconnected = new Promise<void>((resolve) => sock.once('disconnect', () => resolve()));
+
+    await request(app.getHttpServer())
+      .delete(`/api/v1/rooms/${owner.roomId}`)
+      .set(auth(owner.sessionToken))
+      .expect(200);
+
+    expect(await deleted).toEqual({ roomId: owner.roomId });
+    await disconnected;
+  });
 });
