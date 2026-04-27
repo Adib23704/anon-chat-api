@@ -29,6 +29,9 @@
     "lineEnding": "lf"
   },
   "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
     "formatter": {
       "quoteStyle": "single",
       "jsxQuoteStyle": "double",
@@ -61,10 +64,7 @@
           "level": "error",
           "options": { "ignoreRestSiblings": true }
         },
-        "noUnusedFunctionParameters": {
-          "level": "error",
-          "options": { "ignoreRestSiblings": true }
-        },
+        "noUnusedFunctionParameters": "off",
         "noUnusedImports": "error"
       },
       "style": {
