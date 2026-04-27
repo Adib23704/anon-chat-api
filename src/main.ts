@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { type ValidationError, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './chat/socket-io.adapter';
 import { EnvelopeInterceptor } from './common/envelope.interceptor';
 import { ValidationException } from './common/exceptions';
 import { HttpExceptionFilter } from './common/http-exception.filter';
@@ -39,6 +40,8 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(new EnvelopeInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  app.useWebSocketAdapter(new RedisIoAdapter(app));
 
   app.enableShutdownHooks();
   await app.listen(config.env.PORT, '0.0.0.0');

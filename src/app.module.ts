@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 import { AuthGuard } from './common/auth.guard';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
@@ -19,6 +20,7 @@ import { RoomsModule } from './rooms/rooms.module';
     PresenceModule,
     RoomsModule,
     MessagesModule,
+    ChatModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
