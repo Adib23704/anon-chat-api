@@ -1,5 +1,6 @@
-import { Controller, Get, HttpException, HttpStatus, Inject } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import type { Response } from 'express';
 import type { Redis } from 'ioredis';
 import { type Db, DRIZZLE } from '../database/database.providers';
 import { REDIS_CMD } from '../redis/redis.tokens';
@@ -12,17 +13,15 @@ export class HealthController {
   ) {}
 
   @Get()
-  async check() {
+  async check(@Res() res: Response) {
     const [dbOk, redisOk] = await Promise.all([this.pingDb(), this.pingRedis()]);
+    const allOk = dbOk && redisOk;
 
-    if (!dbOk || !redisOk) {
-      throw new HttpException(
-        { status: 'degraded', db: dbOk ? 'ok' : 'down', redis: redisOk ? 'ok' : 'down' },
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
-
-    return { status: 'ok', db: 'ok', redis: 'ok' };
+    res.status(allOk ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE).json({
+      status: allOk ? 'ok' : 'degraded',
+      db: dbOk ? 'ok' : 'down',
+      redis: redisOk ? 'ok' : 'down',
+    });
   }
 
   private async pingDb(): Promise<boolean> {
