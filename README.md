@@ -98,7 +98,6 @@ src/
   health/                 GET /health (DB + Redis ping)
 drizzle/                  generated SQL migrations
 test/                     e2e specs and helpers
-deploy/                   nginx config sample for the VPS deploy
 ```
 
 `ARCHITECTURE.md` is the design walkthrough: diagram, session strategy, pub/sub flow, capacity numbers, scaling plan, and an honest list of the things that would need work before this is production-grade.
