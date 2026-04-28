@@ -36,7 +36,7 @@ describe('messages', () => {
     const r = await request(app.getHttpServer())
       .post('/api/v1/rooms')
       .set(auth(sessionToken))
-      .send({ name: 'r1' });
+      .send({ name: 'room-one' });
     return { sessionToken, user, roomId: r.body.data.id as string };
   }
 
@@ -124,7 +124,7 @@ describe('messages', () => {
   });
 
   it('404 ROOM_NOT_FOUND when posting to unknown room', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     const r = await request(app.getHttpServer())
       .post('/api/v1/rooms/room_nope12345/messages')
       .set(auth(sessionToken))
@@ -134,7 +134,7 @@ describe('messages', () => {
   });
 
   it('404 ROOM_NOT_FOUND when listing messages of unknown room', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     const r = await request(app.getHttpServer())
       .get('/api/v1/rooms/room_nope12345/messages')
       .set(auth(sessionToken))

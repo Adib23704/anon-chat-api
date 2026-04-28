@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import 'dotenv/config'; // load .env into process.env before AppConfigService reads it
-import { type ValidationError, ValidationPipe } from '@nestjs/common';
+import { RequestMethod, type ValidationError, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
@@ -31,7 +31,9 @@ async function bootstrap() {
   const config = app.get(AppConfigService);
 
   app.use(helmet());
-  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
+  app.setGlobalPrefix('api/v1', {
+    exclude: [{ path: 'health', method: RequestMethod.GET }],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

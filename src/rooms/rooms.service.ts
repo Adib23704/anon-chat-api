@@ -112,10 +112,9 @@ export class RoomsService {
 }
 
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === '23505'
+  if (typeof err !== 'object' || err === null) return false;
+  const candidates = [err, (err as { cause?: unknown }).cause].filter(Boolean);
+  return candidates.some(
+    (c) => typeof c === 'object' && c !== null && (c as { code?: string }).code === '23505',
   );
 }

@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { RequestMethod } from '@nestjs/common';
 import type { Params } from 'nestjs-pino';
 
 export function loggerConfig(): Params {
   const isDev = process.env.NODE_ENV !== 'production';
 
   return {
+    forRoutes: [{ path: '*splat', method: RequestMethod.ALL }],
     pinoHttp: {
       level: process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info'),
       autoLogging: { ignore: (req) => req.url === '/health' },

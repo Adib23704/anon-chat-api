@@ -48,7 +48,7 @@ describe('chat gateway', () => {
   }
 
   it('rejects bad token with code 401', async () => {
-    const { roomId } = await setupRoomFor('a');
+    const { roomId } = await setupRoomFor('alice');
     const sock = connect({ url, token: 'nope', roomId });
     const err = await once<{ code: number }>(sock, 'error');
     expect(err.code).toBe(401);
@@ -56,7 +56,7 @@ describe('chat gateway', () => {
   });
 
   it('rejects unknown roomId with code 404', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     const sock = connect({ url, token: sessionToken, roomId: 'room_nope12345' });
     const err = await once<{ code: number }>(sock, 'error');
     expect(err.code).toBe(404);

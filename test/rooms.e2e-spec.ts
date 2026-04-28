@@ -72,7 +72,7 @@ describe('rooms', () => {
   });
 
   it('rejects duplicate room names with 409 ROOM_NAME_TAKEN', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     await request(app.getHttpServer())
       .post('/api/v1/rooms')
       .set(auth(sessionToken))
@@ -88,7 +88,7 @@ describe('rooms', () => {
   });
 
   it('rejects invalid room names with VALIDATION_ERROR', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     const r = await request(app.getHttpServer())
       .post('/api/v1/rooms')
       .set(auth(sessionToken))
@@ -98,7 +98,7 @@ describe('rooms', () => {
   });
 
   it('returns 404 for unknown room', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     const r = await request(app.getHttpServer())
       .get('/api/v1/rooms/room_nope12345')
       .set(auth(sessionToken))
@@ -135,7 +135,7 @@ describe('rooms', () => {
   });
 
   it('reflects activeUsers from Redis', async () => {
-    const { sessionToken } = await login(app, 'a');
+    const { sessionToken } = await login(app, 'alice');
     const created = await request(app.getHttpServer())
       .post('/api/v1/rooms')
       .set(auth(sessionToken))
