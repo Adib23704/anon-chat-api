@@ -1,4 +1,8 @@
 import 'reflect-metadata';
+import { config as loadEnv } from 'dotenv';
+
+loadEnv({ path: '.env.test' });
+loadEnv();
 
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL ??= 'postgres://chat:chat@localhost:5432/chat_test';

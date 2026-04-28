@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import 'dotenv/config'; // load .env into process.env before AppConfigService reads it
 import { type ValidationError, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
