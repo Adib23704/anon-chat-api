@@ -12,7 +12,7 @@ describe('buildPage', () => {
     expect(page.nextCursor).toBeNull();
   });
 
-  it('exactly matches limit but no more — no extra page', () => {
+  it('exactly matches limit but no more - no extra page', () => {
     const page = buildPage(rows.slice(0, 5), 5);
     expect(page.items).toHaveLength(5);
     expect(page.hasMore).toBe(false);

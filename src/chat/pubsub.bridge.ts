@@ -33,7 +33,7 @@ export class PubSubBridge implements OnModuleInit, OnApplicationShutdown {
     try {
       await this.sub.unsubscribe(PUBSUB_CHANNEL);
     } catch {
-      // ignore — connection may already be closing
+      // ignore
     }
   }
 
