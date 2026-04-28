@@ -4,11 +4,18 @@ import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/config.service';
 import { REDIS_CMD, REDIS_SUB } from './redis.tokens';
 
-const opts = {
+const cmdOpts = {
   maxRetriesPerRequest: 3,
   lazyConnect: false,
   connectTimeout: 5_000,
   enableOfflineQueue: false,
+} as const;
+
+const subOpts = {
+  maxRetriesPerRequest: null,
+  lazyConnect: false,
+  connectTimeout: 5_000,
+  enableOfflineQueue: true,
 } as const;
 
 function attachErrorLogger(client: Redis, label: string): Redis {
@@ -21,12 +28,12 @@ export const redisCmdProvider: FactoryProvider = {
   provide: REDIS_CMD,
   inject: [AppConfigService],
   useFactory: (config: AppConfigService) =>
-    attachErrorLogger(new Redis(config.env.REDIS_URL, opts), 'cmd'),
+    attachErrorLogger(new Redis(config.env.REDIS_URL, cmdOpts), 'cmd'),
 };
 
 export const redisSubProvider: FactoryProvider = {
   provide: REDIS_SUB,
   inject: [AppConfigService],
   useFactory: (config: AppConfigService) =>
-    attachErrorLogger(new Redis(config.env.REDIS_URL, opts), 'sub'),
+    attachErrorLogger(new Redis(config.env.REDIS_URL, subOpts), 'sub'),
 };

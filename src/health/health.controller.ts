@@ -2,6 +2,7 @@ import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import type { Response } from 'express';
 import type { Redis } from 'ioredis';
+import { Public } from '../common/public.decorator';
 import { type Db, DRIZZLE } from '../database/database.providers';
 import { REDIS_CMD } from '../redis/redis.tokens';
 
@@ -12,6 +13,7 @@ export class HealthController {
     @Inject(REDIS_CMD) private readonly redis: Redis,
   ) {}
 
+  @Public()
   @Get()
   async check(@Res() res: Response) {
     const [dbOk, redisOk] = await Promise.all([this.pingDb(), this.pingRedis()]);

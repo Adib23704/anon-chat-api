@@ -14,7 +14,11 @@ export class RedisIoAdapter extends IoAdapter {
     const server = super.createIOServer(port, options);
     const cmd = this.app.get<Redis>(REDIS_CMD);
     const sub = this.app.get<Redis>(REDIS_SUB);
-    server.adapter(createAdapter(cmd.duplicate(), sub.duplicate()));
+
+    const adapterCmd = cmd.duplicate({ enableOfflineQueue: true });
+    const adapterSub = sub.duplicate({ enableOfflineQueue: true });
+
+    server.adapter(createAdapter(adapterCmd, adapterSub));
     return server;
   }
 }

@@ -19,12 +19,14 @@ export class PubSubBridge implements OnModuleInit, OnApplicationShutdown {
     private readonly gateway: ChatGateway,
   ) {}
 
-  async onModuleInit() {
-    await this.sub.subscribe(PUBSUB_CHANNEL);
+  onModuleInit() {
     this.sub.on('message', (channel, raw) => {
       if (channel !== PUBSUB_CHANNEL) return;
       this.handle(raw).catch((err) => this.logger.error('pubsub handler failed', err as Error));
     });
+    this.sub
+      .subscribe(PUBSUB_CHANNEL)
+      .catch((err) => this.logger.error('pubsub subscribe failed', err as Error));
   }
 
   async onApplicationShutdown() {
