@@ -2,7 +2,7 @@
 
 Real-time anonymous chat backend. Username-only login, opaque 24h session tokens, rooms with persistent message history, live presence over Socket.io, scaled across instances by Redis pub/sub.
 
-Live deploy: `https://chat.adibdev.me`.
+Live deploy: https://chat.adibdev.me.
 
 ## Stack
 
