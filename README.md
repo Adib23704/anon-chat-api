@@ -45,7 +45,7 @@ Live deployment: [https://chat.adibdev.me](https://chat.adibdev.me)
    pnpm dev
    ```
 
-The API starts on port `3000` by default. You can verify system health at `http://localhost:3000/health`.
+The API starts on port `3000` by default. You can verify system health at `http://localhost:3000/health` and explore the interactive Swagger OpenAPI documentation at `http://localhost:3000/docs`.
 
 ## Environment Variables
 
