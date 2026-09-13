@@ -2,7 +2,7 @@
 
 Real-time anonymous chat service built with NestJS, PostgreSQL, Redis, and Socket.io. Features ephemeral username-based sessions, persistent chat rooms with cursor pagination, live presence tracking, and multi-instance WebSocket broadcasting over Redis pub/sub.
 
-Live deployment: [https://chat.adibdev.me](https://chat.adibdev.me)
+Live deployment: [https://chat.adibdev.me](https://chat.adibdev.me) | Docs: [https://chat.adibdev.me/docs](https://chat.adibdev.me/docs)
 
 ## Tech Stack
 
