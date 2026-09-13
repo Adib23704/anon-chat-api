@@ -31,10 +31,13 @@ export class AuthGuard implements CanActivate {
     const userId = await this.sessions.resolve(token);
     if (!userId) throw new UnauthorizedException();
 
-    const [user] = await this.db.select().from(users).where(eq(users.id, userId));
+    const [user] = await this.db
+      .select({ id: users.id, username: users.username })
+      .from(users)
+      .where(eq(users.id, userId));
     if (!user) throw new UnauthorizedException();
 
-    req.user = { id: user.id, username: user.username };
+    req.user = user;
     return true;
   }
 

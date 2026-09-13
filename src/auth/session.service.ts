@@ -22,8 +22,4 @@ export class SessionService {
   resolve(token: string): Promise<string | null> {
     return this.redis.get(sessionKey(token));
   }
-
-  async revoke(token: string): Promise<void> {
-    await this.redis.del(sessionKey(token));
-  }
 }

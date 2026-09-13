@@ -38,7 +38,7 @@ export class RoomsService {
       .innerJoin(users, eq(rooms.createdById, users.id))
       .orderBy(desc(rooms.createdAt));
 
-    const counts = await Promise.all(rows.map((r) => this.presence.count(r.id)));
+    const counts = await this.presence.countBatch(rows.map((r) => r.id));
 
     return rows.map((r, i) => ({
       id: r.id,
@@ -92,7 +92,10 @@ export class RoomsService {
   }
 
   async requireOwnedBy(id: string, userId: string) {
-    const [row] = await this.db.select().from(rooms).where(eq(rooms.id, id));
+    const [row] = await this.db
+      .select({ createdById: rooms.createdById })
+      .from(rooms)
+      .where(eq(rooms.id, id));
     if (!row) throw new RoomNotFoundException(id);
     if (row.createdById !== userId) {
       throw new ForbiddenException('Only the room creator can delete this room');
@@ -101,8 +104,7 @@ export class RoomsService {
   }
 
   async delete(id: string): Promise<void> {
-    await this.db.delete(rooms).where(eq(rooms.id, id));
-    await this.presence.clear(id);
+    await Promise.all([this.db.delete(rooms).where(eq(rooms.id, id)), this.presence.clear(id)]);
   }
 
   async exists(id: string): Promise<boolean> {

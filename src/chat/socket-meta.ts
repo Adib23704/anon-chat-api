@@ -6,7 +6,7 @@ const key = (id: string) => `sock:${id}`;
 
 export const SocketMetaStore = {
   async set(redis: Redis, id: string, meta: SocketMeta): Promise<void> {
-    await redis.hset(key(id), meta);
+    await redis.pipeline().hset(key(id), meta).expire(key(id), 86400).exec();
   },
 
   async get(redis: Redis, id: string): Promise<SocketMeta | null> {

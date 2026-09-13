@@ -1,124 +1,78 @@
 # Architecture
 
-Design notes for `anon-chat-api`. This document covers the choices behind it: how data flows, how Redis is used, what scales and what doesn't.
+Technical design and architectural overview for `anon-chat-api`.
 
-## Overview
+## System Overview
 
 ```
-                       client (REST + WebSocket)
-                                  |
-                                  v
-                  +---------------+---------------+
-                  |     Nest app instance(s)      |
-                  |  REST controllers + /chat WS  |
-                  +-------+---------------+-------+
-                          |               |
-                     Drizzle           ioredis
-                          |               |
-                          v               v
-                      Postgres           Redis
-                                          |
-                                          +--  session:{token}    -> userId   (24h TTL)
-                                          +--  room:{id}:presence (HASH user -> conn count)
-                                          +--  sock:{socketId}    (HASH userId, username, roomId)
-                                          +--  chat:events        (REST -> gateway pub/sub)
-                                          +--  @socket.io/redis-adapter  (gateway broadcast bus)
+                        Client (HTTP / WebSocket)
+                                   |
+                                   v
+                   +---------------+---------------+
+                   |       NestJS API Node(s)      |
+                   |  REST Controllers + /chat GW  |
+                   +-------+---------------+-------+
+                           |               |
+                      Drizzle ORM       ioredis
+                           |               |
+                           v               v
+                      PostgreSQL         Redis
+                                           |
+                                           +--  session:{token}    -> userId (Key-Value, 24h TTL)
+                                           +--  room:{id}:presence -> {username: count} (Hash)
+                                           +--  sock:{socketId}    -> {userId, username, roomId} (Hash)
+                                           +--  chat:events        (Pub/Sub for REST mutations)
+                                           +--  @socket.io/redis-adapter (WS cluster broadcast bus)
 ```
 
-REST controllers validate input, do their DB work via Drizzle, and either return a payload or throw a domain exception. A global interceptor wraps successful responses in `{success: true, data: ...}`. A global exception filter turns thrown errors into `{success: false, error: {code, message}}` with the right HTTP status. `/health` writes its response directly with `@Res()` so the ops payload stays flat.
+The system separates persistent storage from transient session and connection state:
+- **PostgreSQL** stores durable relational entities (`users`, `rooms`, `messages`).
+- **Redis** manages ephemeral state: user sessions, socket routing metadata, real-time presence counters, and multi-node event distribution.
+- **NestJS Application Layer** handles REST endpoints and WebSocket connections statelessly, allowing instances to scale horizontally behind a reverse proxy or load balancer.
 
-WebSocket lives at the `/chat` namespace. Auth and room existence are checked at handshake. On success the socket joins the Socket.io room, presence is recorded, and `room:joined` goes to the connector while `room:user_joined` goes to everyone else.
+## State Management & Storage
 
-Connection state never lives in process memory. The spec rules out in-memory `Map<socketId, ...>` and the implementation honours that: per-socket metadata is a Redis hash (`sock:{id}`), per-room presence is another (`room:{id}:presence`). `socket.data` is used as a per-connection cache so we don't round-trip Redis on every event from a live socket, but the Redis hash is the source of truth.
+### 1. Relational Data (PostgreSQL)
+All database interactions use Drizzle ORM with strict typing. Schema migrations are managed via Drizzle Kit.
 
-Database access is exclusively through Drizzle. There is no raw SQL outside the migration files Drizzle itself generates.
+- `users`: Unique identifier (`usr_<nanoid>`), unique username, creation timestamp.
+- `rooms`: Unique identifier (`room_<nanoid>`), unique room name, creator reference, creation timestamp.
+- `messages`: Message ID (`msg_<nanoid>`), room foreign key (cascade delete), author foreign key (restrict delete), text content, creation timestamp. Indexed by `(room_id, created_at DESC, id DESC)` for efficient cursor pagination.
 
-### Module layout
+### 2. Ephemeral State (Redis)
+All instance state is externalized to Redis so that any request or socket event can be serviced by any running node without shared process memory:
 
-Feature modules with explicit dependencies, no circular imports:
+- **Sessions (`session:<token>`)**: String key storing the associated `userId`, with an expiring TTL (default 24 hours). Tokens are cryptographically generated 32-byte URL-safe base64 strings.
+- **Socket Metadata (`sock:<socketId>`)**: Hash storing `{ userId, username, roomId }` for fast lookups on disconnect or cleanup without needing in-memory socket maps.
+- **Room Presence (`room:<roomId>:presence`)**: Hash mapping `username -> connectionCount`. Incrementing/decrementing counts via `HINCRBY` allows users with multiple open tabs to maintain presence without premature `leave` notifications.
 
-- `auth` - sessions, login endpoint, exports `SessionService` for the guard
-- `presence` - Redis HASH operations for active users
-- `rooms` - rooms CRUD; depends on `presence` (active count) and `chat` (delete broadcast)
-- `messages` - send and paginated list; depends on `rooms` (existence check) and `chat` (message broadcast)
-- `chat` - WS gateway, pub/sub publisher, subscriber bridge
+## Real-Time Event Architecture & Fan-out
 
-Cross-cutting plumbing (envelope interceptor, exception filter, validation pipe, auth guard, ID generator) lives under `common/`.
+The system handles real-time events through two distinct paths depending on the event source:
 
-## Sessions
+### 1. Gateway-Originated Events (Connection & Presence)
+Events triggered directly by socket lifecycle changes (`room:joined`, `room:user_joined`, `room:user_left`):
+- Handled directly within `ChatGateway`.
+- When a client connects or leaves, the gateway updates presence in Redis and broadcasts to the Socket.io room (`server.to(roomId).emit(...)`).
+- Multi-node fan-out is handled automatically by `@socket.io/redis-adapter`, which mirrors room broadcasts across all cluster instances.
 
-Tokens are opaque random bytes, not JWTs. On each `POST /login`:
+### 2. REST-Originated Events (Messages & Room Deletion)
+Mutations triggered via HTTP endpoints (`POST /rooms/:id/messages` and `DELETE /rooms/:id`):
+- Messages are first persisted to PostgreSQL inside `MessagesService`.
+- Upon successful commit, `ChatPubSub` publishes an event envelope to the Redis channel `chat:events`.
+- Every active API node runs a singleton `PubSubBridge` subscribed to `chat:events`.
+- When an event arrives, each instance broadcasts **locally** to its connected sockets using `server.local.to(roomId).emit(...)`.
+- Using `.local` prevents duplicate delivery: the message was already propagated across instances via `chat:events`, so the socket adapter does not re-broadcast it across instances a second time.
 
-1. Upsert the user by username. The same name always resolves to the same `usr_xxx` id.
-2. Generate `crypto.randomBytes(32).toString('base64url')`, a 43-character URL-safe string.
-3. `SET session:{token} <userId> EX 86400`.
+## Concurrency & Request Lifecycle
 
-On every authenticated request the auth guard reads the bearer header, looks up `session:{token}` in Redis, hydrates the user from Postgres, and attaches them to the request. A miss or expiry returns `UNAUTHORIZED`. There's no refresh endpoint; the spec treats login as get-or-create, so the client just logs in again when the token expires.
+- **Request Validation**: Incoming payloads are validated at the perimeter via `ValidationPipe` using `class-validator` rules, rejecting malformed requests before controller execution.
+- **Response Normalization**: `EnvelopeInterceptor` standardizes successful REST responses into `{ success: true, data: ... }`.
+- **Exception Normalization**: `HttpExceptionFilter` catches domain exceptions and standard HTTP errors, translating them into `{ success: false, error: { code, message } }`.
+- **Graceful Teardown**: Database pools and Redis connections (command, subscriber, and adapter clients) implement lifecycle hooks (`OnApplicationShutdown` / `dispose`) to close connections cleanly on SIGTERM/SIGINT.
 
-Each login mints a fresh token without revoking earlier ones. The 24-hour TTL handles cleanup. Single-active-session would be a one-line `del` of any prior token before the new `set`.
+## Scaling Considerations
 
-JWTs were considered and rejected. The spec explicitly says "opaque token", and Redis lookups give us instant revocation, both of which JWTs would complicate without buying anything for this contract.
-
-## Redis pub/sub fan-out
-
-Two scenarios, two mechanisms.
-
-### Gateway-originated events
-
-`room:joined`, `room:user_joined`, `room:user_left` all originate inside the gateway in response to a socket connecting, disconnecting, or sending `room:leave`. The Socket.io Redis adapter handles cross-instance fan-out for these events for free: when the gateway calls `server.to(roomId).emit(...)`, the adapter republishes through Redis and every instance delivers to its own sockets in that room.
-
-### REST-originated events
-
-`message:new` (after `POST /rooms/:id/messages`) and `room:deleted` (right before `DELETE /rooms/:id` actually drops the row) cannot be emitted from the controller. The spec is specific:
-
-> After saving to the database, publish a `message:new` event to Redis. The WebSocket gateway subscribes to this channel and broadcasts to all connected clients in the room - including those on other server instances. Do not emit directly from the REST controller.
-
-So there's a dedicated channel separate from the Socket.io adapter:
-
-1. The REST service persists to Postgres.
-2. `ChatPubSub.publish(envelope)` publishes to Redis channel `chat:events` via the command client.
-3. Each Nest instance has a `PubSubBridge` that subscribed to `chat:events` at boot using the dedicated subscriber connection.
-4. On a message, the bridge emits to that instance's local sockets only:
-
-   ```ts
-   server.local.to(roomId).emit(eventName, payload);
-   ```
-
-The `.local` qualifier is the load-bearing piece. Without it, the adapter would also re-broadcast through Redis and every client in the room would receive the same event twice (once from the local emit, once from the adapter republishing it). With `.local`, the publish is the cross-instance step and each instance just delivers to the sockets it owns. Every connected client receives the event exactly once.
-
-For `room:deleted` the bridge additionally calls `server.local.in(roomId).fetchSockets()` and disconnects each, so clients close cleanly per the spec.
-
-Why not use one mechanism for both? The adapter is the natural fit when the gateway is the source. The dedicated channel is what the spec asks for on the REST side and `.local` keeps delivery exactly-once. Using the adapter for REST-originated events would either violate the spec's "do not emit directly from the REST controller" or require dedup logic that's brittle under reconnects.
-
-## Capacity (single instance)
-
-Educated guess, not a benchmark. On a small VPS (1 vCPU, 1 GB RAM, e.g. a Hetzner CX22 or equivalent):
-
-- 3,000 to 5,000 concurrent WebSocket connections. Per-socket memory in a Node + Socket.io setup runs roughly 10–30 KB; memory isn't the wall, event-loop latency under fan-out is.
-- 300 to 500 messages per second sustained. Each message is one Postgres `INSERT`, one Redis `PUBLISH`, and a fan-out emit whose cost grows with room size.
-
-The Postgres pool is fixed at 10 connections in `database.providers.ts`, which is the hard ceiling on in-flight DB calls per instance. Redis isn't the bottleneck at this scale: `HINCRBY`, `HKEYS`, `PUBLISH` all run in microseconds.
-
-The first ceiling I'd actually expect to hit is event-loop saturation when a large room produces a burst of messages. Socket.io fan-out is linear in room size and Node is single-threaded, so past a certain message rate the loop falls behind and latency climbs.
-
-These numbers are based on similar setups, not a benchmark of this codebase. A real load test would refine them.
-
-## Scaling 10×
-
-Roughly ordered by "biggest win first, smallest disruption first":
-
-1. More instances behind a load balancer. The design already supports horizontal scaling. Connection state is in Redis, sessions are central, the pub/sub bus is shared. Sticky sessions are not required because no per-socket state lives in any one instance's memory. Cheapest, biggest win.
-2. Per-room pub/sub channels. Right now every instance receives every `chat:events` message and discards the ones for rooms it has no sockets in. At high message rate that wastes work. Switching to `chat:room:{id}` would let each instance subscribe only to the rooms it has sockets in. Subscription churn becomes something to manage; per-message cost drops substantially.
-3. Postgres read replicas. `GET /rooms/:id/messages` is the hot read path. Routing it to a replica is a small change in the database providers and offloads pressure from the primary.
-4. Write-behind buffer for messages. Batch inserts on a 50ms interval and use multi-row `INSERT VALUES (...)`. Adds a tiny amount of latency, multiplies throughput. Only worth doing past a measured ceiling on the simple INSERT.
-5. Split presence onto its own Redis instance. Presence reads happen on every connect/disconnect and every `GET /rooms`. If main Redis CPU starts saturating, this is the cheapest piece to peel off.
-
-## Trade-offs and known limits
-
-- Username squatting. No password layer means anyone can claim any free name. The spec doesn't ask for more, but a real product would need a sign-up flow or a name-reservation grace period.
-- Token rotation. Each login mints a new token without revoking earlier ones; they all live their 24h TTL independently. Multiple active sessions per user are possible.
-- Pub/sub is at-most-once. If the Redis connection drops between `PUBLISH` returning and a subscriber receiving the message, that broadcast is lost for currently-connected viewers. The DB row survives, so a refresh recovers history. Acceptable for chat, not for anything financial.
-- Cursor pagination depends on the cursor row existing. There's no `DELETE /messages/:id` in the contract, so the only way the cursor disappears is `DELETE /rooms/:id` cascading. In that case the next paginated request gets the latest page rather than picking up where it left off.
-- Single region. No replication, no failover. A regional outage takes the service down. Multi-region would mean per-region clusters and either accepting cross-region delivery delay or building a federation layer.
-- `/health` is liveness, not readiness. It pings Postgres and Redis but doesn't verify the pub/sub subscriber is actually subscribed. The bridge logs an error if `subscribe()` fails so it's visible, but a dedicated readiness probe is better before doing rolling deploys.
-- Throttling is per-IP. If the app ever sits behind a reverse proxy or load balancer, it'll need `app.set('trust proxy', ...)` and `X-Forwarded-For` so the throttler sees the real client and not the upstream's address.
+1. **Stateless Nodes**: Because connection metadata and presence live in Redis, API instances do not require sticky sessions for REST calls or socket traffic.
+2. **Database Read Scalability**: High-throughput message history queries (`GET /rooms/:id/messages`) can be offloaded to read replicas with minimal changes to database providers.
+3. **Channel Sharding**: In very large deployments with high message throughput across thousands of rooms, the global `chat:events` pub/sub channel can be partitioned by room (`chat:room:<roomId>`) so instances only process traffic for rooms where they maintain local connections.

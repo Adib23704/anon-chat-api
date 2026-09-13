@@ -1,116 +1,121 @@
-# Anonymous-Chat-API
+# Anon Chat API
 
-Real-time anonymous chat backend. Username-only login, opaque 24h session tokens, rooms with persistent message history, live presence over Socket.io, scaled across instances by Redis pub/sub.
+Real-time anonymous chat service built with NestJS, PostgreSQL, Redis, and Socket.io. Features ephemeral username-based sessions, persistent chat rooms with cursor pagination, live presence tracking, and multi-instance WebSocket broadcasting over Redis pub/sub.
 
-Live deploy: https://chat.adibdev.me.
+Live deployment: [https://chat.adibdev.me](https://chat.adibdev.me)
 
-## Stack
+## Tech Stack
 
-- NestJS 11 (TypeScript)
-- PostgreSQL with Drizzle ORM
-- Redis via ioredis
-- Socket.io 4 with `@socket.io/redis-adapter`
-- Biome for formatting and linting
-- Jest for unit tests
-- pnpm
+- **Framework**: NestJS 12 (Express platform)
+- **Language**: TypeScript 7
+- **Database**: PostgreSQL with Drizzle ORM
+- **Cache & Pub/Sub**: Redis (ioredis)
+- **WebSockets**: Socket.io 4 with `@socket.io/redis-adapter`
+- **Tooling**: Biome (formatter & linter), Jest (unit testing), pnpm
 
-## Setup
+## Getting Started
 
-You'll need Postgres 16+ and Redis 7+ reachable from somewhere. Docker compose is the easiest path; instructions below.
+### Prerequisites
 
-```bash
-pnpm install
-cp .env.example .env       # adjust DATABASE_URL / REDIS_URL if needed
-pnpm db:migrate
-pnpm dev
-```
+- Node.js 24+
+- pnpm 10+
+- PostgreSQL 16+
+- Redis 7+
 
-The app listens on port 3000. `curl localhost:3000/health` returns `{"status":"ok","db":"ok","redis":"ok"}` once the DB and Redis are up.
+### Quickstart
 
-`.env` is loaded automatically (via `dotenv/config` at the top of `main.ts` and the migration script). For tests put values in `.env.test`; the test setup reads it before falling back to `.env` and inline defaults.
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-## Environment
+2. Configure environment:
+   ```bash
+   cp .env.example .env
+   ```
+   Update `DATABASE_URL` and `REDIS_URL` to match your local or hosted instances.
 
-```
-NODE_ENV=development
-PORT=3000
-DATABASE_URL=postgres://chat:chat@localhost:5432/chat
-REDIS_URL=redis://localhost:6379
-LOG_LEVEL=info
-SESSION_TTL_SECONDS=86400
-```
+3. Apply database migrations:
+   ```bash
+   pnpm db:migrate
+   ```
 
-`SESSION_TTL_SECONDS` is the session lifetime; the default 24h matches the spec. If your Postgres password contains characters like `&` or `%`, percent-encode them in the URL (`%26`, `%25`).
+4. Start development server:
+   ```bash
+   pnpm dev
+   ```
 
-## Scripts
+The API starts on port `3000` by default. You can verify system health at `http://localhost:3000/health`.
 
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Watch mode |
-| `pnpm build` | Compile to `dist/` |
-| `pnpm start` | Run the compiled app |
-| `pnpm db:generate` | Generate a Drizzle migration from the schema |
-| `pnpm db:migrate` | Apply pending migrations |
-| `pnpm test` | Unit tests |
-| `pnpm lint` / `pnpm lint:fix` | Biome lint |
-| `pnpm format` | Biome format |
-| `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm validate` | `biome check` + typecheck (use this in CI) |
+## Environment Variables
 
-## Tests
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `NODE_ENV` | `development` | Runtime environment (`development`, `production`, `test`) |
+| `PORT` | `3000` | HTTP port the server listens on |
+| `DATABASE_URL` | `postgres://chat:chat@localhost:5432/chat` | PostgreSQL connection URL |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL |
+| `LOG_LEVEL` | `info` | Logging verbosity (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) |
+| `SESSION_TTL_SECONDS` | `86400` | Session lifetime in seconds (default: 24 hours) |
 
-Unit tests don't need anything external:
+> **Note**: If your database password contains special characters (`&`, `%`, `@`), remember to percent-encode them in `DATABASE_URL`.
 
-```bash
-pnpm test
-```
+## Available Scripts
 
-## Project layout
+| Script | Description |
+| :--- | :--- |
+| `pnpm dev` | Starts the app with TypeScript watch mode |
+| `pnpm build` | Compiles TypeScript source to `./dist` |
+| `pnpm start` | Runs compiled production build (`node dist/main.js`) |
+| `pnpm db:generate` | Generates SQL migrations from schema |
+| `pnpm db:migrate` | Runs pending Drizzle migrations |
+| `pnpm test` | Runs unit test suite |
+| `pnpm test:watch` | Runs unit tests in watch mode |
+| `pnpm lint` / `pnpm lint:fix` | Runs Biome linter (with optional auto-fix) |
+| `pnpm format` | Formats source files with Biome |
+| `pnpm typecheck` | Validates TypeScript types without emitting JS |
+| `pnpm validate` | Full pipeline check: Biome lint/format + TypeScript typecheck |
 
-```
-src/
-  main.ts                 helmet, validation pipe, envelope, exception filter, ws adapter
-  app.module.ts
-  config/                 zod-validated env, pino logger config
-  common/                 envelope interceptor, exception filter, domain exceptions, auth guard, @Public, @CurrentUser, id generator
-  database/               drizzle client + schema + migration runner
-  redis/                  ioredis providers (cmd + sub)
-  auth/                   POST /login, sessions in Redis, AuthGuard
-  presence/               room:{id}:presence HASH (multi-tab safe)
-  rooms/                  rooms CRUD
-  messages/               messages send + paginated list
-  chat/                   /chat WS gateway, pub/sub publisher + subscriber bridge
-  health/                 GET /health (DB + Redis ping)
-drizzle/                  generated SQL migrations
-```
+## API & WebSocket Overview
 
-`ARCHITECTURE.md` is the design walkthrough: diagram, session strategy, pub/sub flow, capacity numbers, scaling plan, and an honest list of the things that would need work before this is production-grade.
+### Authentication
+- `POST /api/v1/login` - Accepts `{ "username": "string" }`. Returns a 43-character opaque session token and user profile. Existing usernames return the same user ID with a freshly minted session token.
+- Protected routes require the `Authorization: Bearer <sessionToken>` header.
+
+### REST Endpoints
+- `GET /api/v1/rooms` - Lists all rooms with active participant counts.
+- `POST /api/v1/rooms` - Creates a new room.
+- `GET /api/v1/rooms/:id` - Fetches room details.
+- `DELETE /api/v1/rooms/:id` - Deletes a room, cascades message cleanup, and disconnects room sockets.
+- `GET /api/v1/rooms/:id/messages?before=<msg_id>&limit=<n>` - Cursor-paginated message history.
+- `POST /api/v1/rooms/:id/messages` - Sends a message, persists to database, and triggers real-time broadcast.
+- `GET /health` - Health check reporting database and Redis status.
+
+### WebSocket Gateway
+- Namespace: `/chat`
+- Handshake query params: `?token=<sessionToken>&roomId=<roomId>`
+- Socket events:
+  - `room:joined` - Sent to connecting socket on successful join.
+  - `room:user_joined` / `room:user_left` - Broadcasts room presence changes.
+  - `message:new` - Real-time message broadcast to room members.
+  - `room:deleted` - Sent prior to socket disconnection when a room is removed.
 
 ## Docker
 
-`docker-compose.yml` brings up Postgres, Redis, and the app together. Migrations run before the server starts.
+Run the complete stack (Postgres, Redis, and API) via Docker Compose:
 
 ```bash
 docker compose up -d --build
+```
+
+View application logs:
+
+```bash
 docker compose logs -f app
-curl localhost:3000/health
 ```
 
-All exposed ports are bound to `127.0.0.1` so nothing leaks onto the public interface even without a host firewall. Stop with `docker compose down`. Named volumes (`pgdata`, `redisdata`) survive restarts.
-
-## Updates
+Stop services:
 
 ```bash
-git pull && docker compose up -d --build
-```
-
-Migrations apply automatically on container start.
-
-## Smoke Test
-
-```bash
-curl https://chat.adibdev.me/health
-curl -X POST https://chat.adibdev.me/api/v1/login \
-  -H 'content-type: application/json' \
-  -d '{"username":"smoke"}'
+docker compose down
 ```

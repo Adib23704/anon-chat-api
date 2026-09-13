@@ -38,10 +38,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const userId = await this.sessions.resolve(token);
       if (!userId) return reject(socket, 401, 'Unauthorized');
 
-      const [user] = await this.db.select().from(users).where(eq(users.id, userId));
+      const [[user], [room]] = await Promise.all([
+        this.db
+          .select({ id: users.id, username: users.username })
+          .from(users)
+          .where(eq(users.id, userId)),
+        this.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, roomId)),
+      ]);
       if (!user) return reject(socket, 401, 'Unauthorized');
-
-      const [room] = await this.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, roomId));
       if (!room) return reject(socket, 404, 'Room not found');
 
       const meta: SocketMeta = { userId: user.id, username: user.username, roomId };
@@ -74,9 +78,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       (socket.data as SocketMeta | undefined) ?? (await SocketMetaStore.get(this.redis, socket.id));
     if (!meta?.roomId || !meta.username) return;
 
-    await SocketMetaStore.clear(this.redis, socket.id);
-
-    const { isLastConnection, activeUsers } = await this.presence.leave(meta.roomId, meta.username);
+    const [, { isLastConnection, activeUsers }] = await Promise.all([
+      SocketMetaStore.clear(this.redis, socket.id),
+      this.presence.leave(meta.roomId, meta.username),
+    ]);
 
     if (isLastConnection) {
       socket.to(meta.roomId).emit(ServerEvents.RoomUserLeft, {

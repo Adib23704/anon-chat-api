@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Env, envSchema } from './env.schema';
+import { type Env, envSchema } from './env.schema';
 
 @Injectable()
 export class AppConfigService {
@@ -12,9 +12,5 @@ export class AppConfigService {
       throw new Error(`Invalid environment configuration:\n${issues}`);
     }
     this.env = parsed.data;
-  }
-
-  get isProd() {
-    return this.env.NODE_ENV === 'production';
   }
 }
