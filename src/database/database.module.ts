@@ -16,6 +16,6 @@ export class DatabaseModule implements OnApplicationShutdown {
   constructor(@Inject(PG_CLIENT) private readonly client: PgClient) {}
 
   async onApplicationShutdown() {
-    await this.client.end({ timeout: 5 });
+    await this.client.end({ timeout: process.env.NODE_ENV === 'test' ? 0 : 5 });
   }
 }

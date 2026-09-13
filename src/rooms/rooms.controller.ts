@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post } from '@nestjs/common';
 import { ChatPubSub } from '../chat/pubsub.service';
 import { type AuthUser, CurrentUser } from '../common/current-user.decorator';
 import { CreateRoomDto } from './dto/create-room.dto';
@@ -7,8 +7,8 @@ import { RoomsService } from './rooms.service';
 @Controller('rooms')
 export class RoomsController {
   constructor(
-    private readonly rooms: RoomsService,
-    private readonly pubsub: ChatPubSub,
+    @Inject(RoomsService) private readonly rooms: RoomsService,
+    @Inject(ChatPubSub) private readonly pubsub: ChatPubSub,
   ) {}
 
   @Get()

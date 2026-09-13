@@ -9,6 +9,8 @@ const cmdOpts = {
   lazyConnect: false,
   connectTimeout: 5_000,
   enableOfflineQueue: false,
+  retryStrategy: (times: number) =>
+    process.env.NODE_ENV === 'test' ? null : Math.min(times * 50, 2000),
 } as const;
 
 const subOpts = {
@@ -16,6 +18,8 @@ const subOpts = {
   lazyConnect: false,
   connectTimeout: 5_000,
   enableOfflineQueue: true,
+  retryStrategy: (times: number) =>
+    process.env.NODE_ENV === 'test' ? null : Math.min(times * 50, 2000),
 } as const;
 
 function attachErrorLogger(client: Redis, label: string): Redis {

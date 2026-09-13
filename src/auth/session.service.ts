@@ -10,7 +10,7 @@ const sessionKey = (token: string) => `session:${token}`;
 export class SessionService {
   constructor(
     @Inject(REDIS_CMD) private readonly redis: Redis,
-    private readonly config: AppConfigService,
+    @Inject(AppConfigService) private readonly config: AppConfigService,
   ) {}
 
   async issue(userId: string): Promise<string> {

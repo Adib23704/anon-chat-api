@@ -15,6 +15,20 @@ export class RedisModule implements OnApplicationShutdown {
   ) {}
 
   async onApplicationShutdown() {
-    await Promise.allSettled([this.cmd.quit(), this.sub.quit()]);
+    const close = async (client: Redis) => {
+      if (['wait', 'reconnecting', 'connecting'].includes(client.status)) {
+        client.disconnect();
+        return;
+      }
+      try {
+        await Promise.race([
+          client.quit(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000)),
+        ]);
+      } catch {
+        client.disconnect();
+      }
+    };
+    await Promise.allSettled([close(this.cmd), close(this.sub)]);
   }
 }

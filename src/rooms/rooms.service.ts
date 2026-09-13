@@ -23,7 +23,7 @@ export type RoomDetail = RoomSummary & { activeUsers: number };
 export class RoomsService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Db,
-    private readonly presence: PresenceService,
+    @Inject(PresenceService) private readonly presence: PresenceService,
   ) {}
 
   async list(): Promise<RoomDetail[]> {

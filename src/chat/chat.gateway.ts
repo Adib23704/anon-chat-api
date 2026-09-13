@@ -24,8 +24,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
 
   constructor(
-    private readonly sessions: SessionService,
-    private readonly presence: PresenceService,
+    @Inject(SessionService) private readonly sessions: SessionService,
+    @Inject(PresenceService) private readonly presence: PresenceService,
     @Inject(DRIZZLE) private readonly db: Db,
     @Inject(REDIS_CMD) private readonly redis: Redis,
   ) {}

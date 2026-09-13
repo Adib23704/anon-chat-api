@@ -1,3 +1,5 @@
+import * as classTransformer from 'class-transformer';
+import * as classValidator from 'class-validator';
 import 'reflect-metadata';
 import 'dotenv/config'; // load .env into process.env before AppConfigService reads it
 import { RequestMethod, type ValidationError, ValidationPipe } from '@nestjs/common';
@@ -37,6 +39,8 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
+      validatorPackage: classValidator,
+      transformerPackage: classTransformer,
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,

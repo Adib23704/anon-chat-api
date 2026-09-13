@@ -32,8 +32,8 @@ export type MessagesPage = {
 export class MessagesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Db,
-    private readonly rooms: RoomsService,
-    private readonly pubsub: ChatPubSub,
+    @Inject(RoomsService) private readonly rooms: RoomsService,
+    @Inject(ChatPubSub) private readonly pubsub: ChatPubSub,
   ) {}
 
   async send(roomId: string, userId: string, username: string, raw: string): Promise<MessageView> {

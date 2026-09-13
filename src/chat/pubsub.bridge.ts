@@ -16,7 +16,7 @@ export class PubSubBridge implements OnModuleInit, OnApplicationShutdown {
 
   constructor(
     @Inject(REDIS_SUB) private readonly sub: Redis,
-    private readonly gateway: ChatGateway,
+    @Inject(ChatGateway) private readonly gateway: ChatGateway,
   ) {}
 
   onModuleInit() {
@@ -31,7 +31,12 @@ export class PubSubBridge implements OnModuleInit, OnApplicationShutdown {
 
   async onApplicationShutdown() {
     try {
-      await this.sub.unsubscribe(PUBSUB_CHANNEL);
+      if (this.sub.status === 'ready') {
+        await Promise.race([
+          this.sub.unsubscribe(PUBSUB_CHANNEL),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000)),
+        ]);
+      }
     } catch {
       // ignore
     }

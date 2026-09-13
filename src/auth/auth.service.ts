@@ -9,7 +9,7 @@ import { SessionService } from './session.service';
 export class AuthService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Db,
-    private readonly sessions: SessionService,
+    @Inject(SessionService) private readonly sessions: SessionService,
   ) {}
 
   async login(username: string) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { type AuthUser, CurrentUser } from '../common/current-user.decorator';
 import { ListMessagesDto } from './dto/list-messages.dto';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -6,7 +6,7 @@ import { MessagesService } from './messages.service';
 
 @Controller('rooms/:id/messages')
 export class MessagesController {
-  constructor(private readonly messages: MessagesService) {}
+  constructor(@Inject(MessagesService) private readonly messages: MessagesService) {}
 
   @Get()
   list(@Param('id') roomId: string, @Query() q: ListMessagesDto) {

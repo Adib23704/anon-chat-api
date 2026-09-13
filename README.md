@@ -11,7 +11,7 @@ Live deploy: https://chat.adibdev.me.
 - Redis via ioredis
 - Socket.io 4 with `@socket.io/redis-adapter`
 - Biome for formatting and linting
-- Jest with supertest for unit and e2e tests
+- Jest for unit tests
 - pnpm
 
 ## Setup
@@ -22,7 +22,7 @@ You'll need Postgres 16+ and Redis 7+ reachable from somewhere. Docker compose i
 pnpm install
 cp .env.example .env       # adjust DATABASE_URL / REDIS_URL if needed
 pnpm db:migrate
-pnpm start:dev
+pnpm dev
 ```
 
 The app listens on port 3000. `curl localhost:3000/health` returns `{"status":"ok","db":"ok","redis":"ok"}` once the DB and Redis are up.
@@ -46,13 +46,12 @@ SESSION_TTL_SECONDS=86400
 
 | Command | What it does |
 | --- | --- |
-| `pnpm start:dev` | Watch mode |
+| `pnpm dev` | Watch mode |
 | `pnpm build` | Compile to `dist/` |
 | `pnpm start` | Run the compiled app |
 | `pnpm db:generate` | Generate a Drizzle migration from the schema |
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm test` | Unit tests |
-| `pnpm test:e2e` | End-to-end contract tests (needs Postgres + Redis up) |
 | `pnpm lint` / `pnpm lint:fix` | Biome lint |
 | `pnpm format` | Biome format |
 | `pnpm typecheck` | `tsc --noEmit` |
@@ -65,20 +64,6 @@ Unit tests don't need anything external:
 ```bash
 pnpm test
 ```
-
-The e2e suite hits a real Postgres and Redis. Defaults in `test/setup.ts`:
-
-- `postgres://chat:chat@localhost:5432/chat_test`
-- `redis://localhost:6379/1` (logical DB 1, isolated from dev)
-
-Override via `DATABASE_URL` and `REDIS_URL`, or put real test creds in `.env.test`. The test database needs migrations applied once before tests can run:
-
-```bash
-DATABASE_URL=<test-url> pnpm db:migrate
-pnpm test:e2e
-```
-
-The suite covers every REST endpoint and WebSocket: login (idempotent), rooms CRUD with active-user counts, message persist + cursor pagination, presence join/leave, REST-triggered `message:new` and `room:deleted` broadcasts. 23 specs total across `auth`, `rooms`, `messages`, `chat`.
 
 ## Project layout
 
@@ -97,7 +82,6 @@ src/
   chat/                   /chat WS gateway, pub/sub publisher + subscriber bridge
   health/                 GET /health (DB + Redis ping)
 drizzle/                  generated SQL migrations
-test/                     e2e specs and helpers
 ```
 
 `ARCHITECTURE.md` is the design walkthrough: diagram, session strategy, pub/sub flow, capacity numbers, scaling plan, and an honest list of the things that would need work before this is production-grade.

@@ -12,9 +12,9 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
-    private readonly reflector: Reflector,
+    @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(DRIZZLE) private readonly db: Db,
-    private readonly sessions: SessionService,
+    @Inject(SessionService) private readonly sessions: SessionService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
